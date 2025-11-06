@@ -1,0 +1,210 @@
+Perfect 🔥
+Berarti kamu mau **versi sederhana tapi production-ready** chatbot Gemini dengan Next.js fullstack — login/register (auth), chat UI non-streaming, dan penyimpanan riwayat percakapan (localStorage atau Redis opsional).
+Kita buat **checklist super fokus** buat versi ini ya, biar kamu bisa langsung tulis di buku dan centang satu-satu.
+
+---
+
+# ✅ **Checklist: Chatbot Gemini (Simple Version – Next.js Fullstack)**
+
+### 🧩 **1. Persiapan Awal**
+
+* [ ] Pastikan Node.js versi terbaru (≥ 18.x) terinstal
+* [ ] Install Next.js (TypeScript disarankan)
+
+  ```bash
+  npx create-next-app@latest gemini-chatbot --ts
+  ```
+* [ ] Buat file `.env.local` untuk simpan variabel:
+
+  ```env
+  GEMINI_API_KEY=your_api_key_here
+  NEXTAUTH_SECRET=your_nextauth_secret
+  ```
+* [ ] Generate API Key Gemini dari [Google AI Studio](https://aistudio.google.com/)
+  → Copy & paste ke `.env.local`
+
+---
+
+### 👥 **2. Setup Authentication (Email & Password Only)**
+
+* [ ] Install dependencies auth:
+
+  ```bash
+  npm install next-auth bcrypt prisma @prisma/client
+  ```
+* [ ] Setup Prisma untuk DB (SQLite dulu aja untuk lokal)
+
+  ```bash
+  npx prisma init --datasource-provider sqlite
+  ```
+* [ ] Buat model `User` di `prisma/schema.prisma`:
+
+  ```prisma
+  model User {
+    id       Int     @id @default(autoincrement())
+    email    String  @unique
+    password String
+  }
+  ```
+* [ ] Jalankan migrasi:
+
+  ```bash
+  npx prisma migrate dev --name init
+  ```
+* [ ] Buat file `/pages/api/auth/[...nextauth].ts` dengan NextAuth (Email/Password):
+
+  * Provider custom (credentials)
+  * Hash password pakai `bcrypt`
+  * Validasi login ke DB
+* [ ] Buat halaman `/login` dan `/register`
+
+  * Form login/register sederhana
+  * Register → hash password & simpan ke DB
+  * Login → autentikasi & simpan session
+
+---
+
+### 💬 **3. Setup API Chat (Backend)**
+
+* [ ] Buat file `/pages/api/chat.ts`
+  Struktur dasar:
+
+  ```ts
+  import type { NextApiRequest, NextApiResponse } from "next";
+
+  export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    if (req.method !== "POST") return res.status(405).json({ message: "Method not allowed" });
+    const { message } = req.body;
+
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + process.env.GEMINI_API_KEY, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: message }] }]
+      }),
+    });
+
+    const data = await response.json();
+    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || "No response from model.";
+
+    res.status(200).json({ reply });
+  }
+  ```
+* [ ] Tambahkan proteksi supaya hanya user login yang bisa akses `/api/chat`
+  (gunakan `getServerSession` dari NextAuth)
+
+---
+
+### 💾 **4. Riwayat Percakapan**
+
+Kamu punya dua opsi — pilih salah satu:
+
+#### **A. Disimpan Lokal (localStorage)**
+
+* [ ] Di halaman chat (`/chat`), buat state `messages`
+* [ ] Saat user kirim pesan:
+
+  * Push `{ role: "user", text: message }`
+  * Setelah respon dari API, push `{ role: "bot", text: reply }`
+* [ ] Setelah setiap update, simpan ke localStorage:
+
+  ```js
+  useEffect(() => {
+    localStorage.setItem("chat_history", JSON.stringify(messages));
+  }, [messages]);
+  ```
+* [ ] Saat halaman dimuat, load ulang dari localStorage:
+
+  ```js
+  useEffect(() => {
+    const saved = localStorage.getItem("chat_history");
+    if (saved) setMessages(JSON.parse(saved));
+  }, []);
+  ```
+
+#### **B. Disimpan Redis (opsional nanti)**
+
+* [ ] Install `ioredis` dan setup koneksi di server
+* [ ] Simpan history per user ID
+* [ ] Bisa ditambahkan nanti jika kamu mau versi multi-device sync
+
+---
+
+### 💻 **5. Chat UI**
+
+* [ ] Buat halaman `/chat`
+* [ ] Buat layout sederhana:
+
+  * Box pesan (scrollable)
+  * Input + tombol kirim
+  * Loading spinner (gunakan state `loading`)
+* [ ] Flow:
+
+  1. User ketik → klik kirim
+  2. Munculkan loading effect (animasi titik atau spinner)
+  3. Kirim ke `/api/chat`
+  4. Terima reply → tampilkan di UI & simpan ke localStorage
+* [ ] Styling: pakai TailwindCSS
+
+  ```bash
+  npm install -D tailwindcss postcss autoprefixer
+  npx tailwindcss init -p
+  ```
+
+  Lalu setup `globals.css` sesuai dokumentasi
+
+---
+
+### 🔐 **6. Proteksi Halaman**
+
+* [ ] Halaman `/chat` hanya bisa diakses jika login
+  Gunakan NextAuth `useSession()`:
+
+  ```tsx
+  const { data: session, status } = useSession();
+  if (status === "unauthenticated") router.push("/login");
+  ```
+* [ ] Tambahkan navbar kecil (Logout / Chat)
+
+---
+
+### 🧠 **7. Testing Lokal**
+
+* [ ] Jalankan:
+
+  ```bash
+  npm run dev
+  ```
+* [ ] Test:
+
+  * Register → Login → Masuk Chat
+  * Kirim pesan → lihat balasan Gemini
+  * Cek localStorage → ada riwayat tersimpan?
+  * Reload page → history masih muncul?
+
+---
+
+### 🚀 **8. Deployment Lokal / GitHub**
+
+* [ ] Commit semua ke GitHub Private repo
+* [ ] Pastikan `.env.local` tidak ikut commit (`.gitignore`)
+* [ ] Jalankan di lokal:
+
+  ```bash
+  npm run build
+  npm run start
+  ```
+* [ ] Jika nanti ingin deploy publik → Vercel tinggal connect GitHub
+
+---
+
+# ✨ Ringkasan Tujuan Akhir
+
+✅ Login / Register (Email + Password)
+✅ Chat sederhana non-streaming
+✅ Backend Next.js panggil Gemini API
+✅ History tersimpan di localStorage
+✅ Aman (API key tidak bocor)
+✅ Deploy private di GitHub lokal
+
+---
